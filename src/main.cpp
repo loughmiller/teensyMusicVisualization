@@ -10,7 +10,9 @@
 
 #define SAMPLE_RATE_HZ 2560          // Sample rate of the audio in hertz.
 #define FFT_SIZE 256                 // Size of the FFT.  Realistically can only be at most 256
-                                     // 25Hz per bin
+                                     // 10Hz per bin
+
+#define MIDDLE_A 440.0
 
 #define SAMPLE_SIZE FFT_SIZE*2       // Complex FFT functions require a coefficient for the imaginary part of the
                                      // input.  This makes the sample array 2x the FFT_SIZE
@@ -87,10 +89,16 @@ void loop() {
       j = i;
     }
   }
+
+  float frequency = j * (SAMPLE_RATE_HZ / FFT_SIZE);
+
+  int note = roundf(12 * (log(frequency / MIDDLE_A) / log(2)));
   
   Serial.print(j);
   Serial.print(" - ");
-  Serial.print(j * (SAMPLE_RATE_HZ / FFT_SIZE));
+  Serial.print(note);
+  Serial.print(" - ");
+  Serial.print(frequency);
   Serial.print(" - ");
   Serial.println(magnitudes[j]);
 
