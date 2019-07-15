@@ -13,7 +13,7 @@ using namespace std;
 const int numLEDs{24};               // MEDALLION
 
 
-// FFT CONSTANTS
+// NOTE DETECTION CONSTANTS
 const uint_fast16_t fftSize{256};               // Size of the FFT.  Realistically can only be at most 256
 const uint_fast16_t fftBinSize{8};              // Hz per FFT bin  -  sample rate is fftSize * fftBinSize
 const uint_fast16_t sampleCount{fftSize * 2};   // Complex FFT functions require a coefficient for the imaginary part of the
@@ -21,28 +21,25 @@ const uint_fast16_t sampleCount{fftSize * 2};   // Complex FFT functions require
 const float middleA{440.0};                     // frequency of middle A.  Needed for freqeuncy to note conversion
 const uint_fast16_t sampleIntervalMs{1000000 / (fftSize * fftBinSize)};  // how often to get a sample, needed for IntervalTimer
 
-// FFT GLOBALS
+// NOTE DETECTION GLOBALS
 float samples[sampleCount*2];
 uint_fast16_t sampleCounter = 0;
-
-// FFT FUNCTIONS
-void samplingCallback();
-
-
 float sampleBuffer[sampleCount];
 float magnitudes[fftSize];
+arm_cfft_radix4_instance_f32 fft_inst;
+IntervalTimer samplingTimer;
+
+// NOTE DETECTION FUNCTIONS
+void noteDetectionSetup();        // run this once during setup
+void noteDetectionLoop();         // run this once per loop
+void samplingCallback();    
 
 float noteMagnatudes[numLEDs];
 CRGB leds[numLEDs];
 const int saturation{244};
 
-
 int hue = 0;
-
 Visualization * all;
-
-IntervalTimer samplingTimer;
-
 
 void setup() {
   delay(3000);
@@ -52,11 +49,7 @@ void setup() {
 
   randomSeed(analogRead(15));
 
-  // FFT SETUP
-  pinMode(AUDIO_INPUT_PIN, INPUT);
-  analogReadResolution(10);
-  analogReadAveraging(16);
-  samplingTimer.begin(samplingCallback, sampleIntervalMs);
+  noteDetectionSetup();
 
   // DISPLAY STUFF
   FastLED.addLeds<NEOPIXEL, DISPLAY_LED_PIN>(leds, numLEDs).setCorrection( TypicalLEDStrip );;
@@ -95,12 +88,7 @@ void loop() {
   // }
   iteration++;
 
-  memcpy(sampleBuffer, samples + (sampleCounter + 1), sizeof(float) * sampleCount);
-  arm_cfft_radix4_instance_f32 fft_inst;
-  arm_cfft_radix4_init_f32(&fft_inst, fftSize, 0, 1);
-  arm_cfft_radix4_f32(&fft_inst, sampleBuffer);
-  // Calculate magnitude of complex numbers output by the FFT.
-  arm_cmplx_mag_f32(sampleBuffer, magnitudes, fftSize);
+  noteDetectionLoop();
 
   for (uint_fast16_t i=0; i<numLEDs; i++) {
     noteMagnatudes[i] = 0;
@@ -159,28 +147,30 @@ void loop() {
       } else {
         value = ((noteMagnatudes[i] - threshold) / (peak - threshold)) * 256;
       }
-      // Serial.println(value);
       all->setValue(value);
       all->setLEDColor(i);
     }
   }
 
-  // Serial.print(j);
-  // Serial.print(" - ");
-  // Serial.print(note);
-  // Serial.print(" - ");
-  // Serial.print(frequency);
-  // Serial.print(" - ");
-  // Serial.println(magnitudes[j]);
-
-  // delay(1000);
    FastLED.show(); 
-  //  Serial.print(threshold);
-  //  Serial.print(" - ");
-  //  Serial.println(noteMagnatudes[10]);
-  // Serial.println("End Loop\n");
 }
 
+void noteDetectionSetup() {
+  pinMode(AUDIO_INPUT_PIN, INPUT);
+  analogReadResolution(10);
+  analogReadAveraging(16);
+  arm_cfft_radix4_init_f32(&fft_inst, fftSize, 0, 1);
+  samplingTimer.begin(samplingCallback, sampleIntervalMs);
+}
+
+void noteDetectionLoop() {
+  // copy the last N samples into a buffer
+  memcpy(sampleBuffer, samples + (sampleCounter + 1), sizeof(float) * sampleCount);
+
+  // FFT magic
+  arm_cfft_radix4_f32(&fft_inst, sampleBuffer);
+  arm_cmplx_mag_f32(sampleBuffer, magnitudes, fftSize);
+}
 
 void samplingCallback() {
   // Read from the ADC and store the sample data
