@@ -47,16 +47,13 @@ void setup() {
   Serial.begin(9600);
   Serial.println("setup started");
 
-  randomSeed(analogRead(15));
-
   noteDetectionSetup();
 
   // DISPLAY STUFF
   FastLED.addLeds<NEOPIXEL, DISPLAY_LED_PIN>(leds, numLEDs).setCorrection( TypicalLEDStrip );;
   all = new Visualization(numLEDs, 1, hue, saturation, leds);
   FastLED.setBrightness(32);
-  FastLED.setDither(0);
-  all->setSaturation(saturation);
+  // FastLED.setDither(0); 
   all->setAllCRGB(0x101010);
   FastLED.show();
   delay(1000);
@@ -77,15 +74,7 @@ void loop() {
   all->setHue(hue);
 
   bool newSec = false;
-  int newTime = millis() / 1000;
-  // if (newTime > time) {
-  //   newSec = true;
-  //   time = newTime;
-  //   Serial.print("foo: ");
-  //   Serial.print(time);
-  //   Serial.print(" - ");
-  //   Serial.println(iteration);
-  // }
+
   iteration++;
 
   noteDetectionLoop();
@@ -97,32 +86,23 @@ void loop() {
   for (uint_fast16_t i=1; i<fftSize/2; i++) {  // ignore top half of the FFT results
     float frequency = i * (fftBinSize);
     int note = roundf(12 * (log(frequency / middleA) / log(2))) + 32;
-    note = note % numLEDs;
-    // Serial.print(note);
-    // Serial.print(" - ");
-    // Serial.print(frequency);
-    // Serial.print(" - ");
-    // Serial.println(magnitudes[i]);
 
+    if (note < 0) {
+      continue;
+    }
+
+    note = note % numLEDs;
     noteMagnatudes[note] = max(noteMagnatudes[note], magnitudes[i]);
   }
-
-  // for (int i=0; i<numLEDs; i++) {
-  //   Serial.print(i);
-  //   Serial.print(" - ");
-  //   Serial.println(noteMagnatudes[i]);
-  // }
-  // Serial.println();
 
   float sorted[numLEDs];
   memcpy(sorted, noteMagnatudes, sizeof(noteMagnatudes[0]) * numLEDs);
   sort(sorted, sorted+sizeof(sorted)/sizeof(sorted[0]));
 
-  float twoThirds = sorted[16];
-  float maxNote = sorted[23];
+  float twoThirds = sorted[18];
+  float maxNote = sorted[22];
   threshold = (threshold * (99.0/100.0)) + (twoThirds/100.0);
-  peak = (peak * (99.0/100.0)) + (maxNote/100.0);
-  // Serial.print("2/3rd: ");
+  peak = (peak * (199.0/200.0)) + (maxNote/200.0);
 
   if (newSec) {
     Serial.println(twoThirds);
@@ -131,12 +111,6 @@ void loop() {
     Serial.println(maxNote);
     Serial.print("peak: ");
     Serial.println(peak);
-
-  //   for (int i=0; i<numLEDs; i++) {
-  //     Serial.print(i);
-  //     Serial.print(" - ");
-  //     Serial.println(sorted[i]);
-  //   }
   }
 
   for (uint_fast16_t i=0; i<numLEDs; i++) {
@@ -145,7 +119,7 @@ void loop() {
       if (noteMagnatudes[i] > peak) {
         value = 255;
       } else {
-        value = ((noteMagnatudes[i] - threshold) / (peak - threshold)) * 256;
+        value = ((noteMagnatudes[i] - threshold) / (peak - threshold)) * 255;
       }
       all->setValue(value);
       all->setLEDColor(i);
